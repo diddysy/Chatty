@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Threaded GIF Chat with Photos & Profile Pics</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+  <style>
+    body { 
+      font-family: 'Segoe UI', sans-serif; 
+      background: #f4f4f4; 
+      margin: 0; 
+      padding: 0; 
+    }
+    #container { 
+      max-width: 700px; 
+      margin: 30px auto; 
+      padding: 20px; 
+      background: white; 
+      border-radius: 10px; 
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+    }
+    h2 { 
+      text-align: center; 
+      color: #444; 
+      margin-bottom: 20px;
+    }
+    #login { 
+      display: flex; 
+      flex-direction: column; 
+      gap: 15px;
+    }
+    #chat { 
+      display: none; 
+    }
+
+    #messages { 
+      max-height: 400px; 
+      overflow-y: auto; 
+      border: 1px solid #ddd; 
+      padding: 10px; 
+      background: #fafafa; 
+      margin-bottom: 10px; 
+      scrollbar-width: thin;
+    }
+    #messages::-webkit-scrollbar {
+      width: 8px;
+    }
+    #messages::-webkit-scrollbar-thumb {
+      background-color: #ccc;
+      border-radius: 4px;
+    }
+
+    .message { 
+      margin-bottom: 12px; 
+      display: flex; 
+      align-items: flex-start; 
+    }
+    .reply { 
+      margin-left: 25px; 
+      margin-top: 4px; 
+      border-left: 2px solid #eee;
+      padding-left: 10px;
+    }
+    .avatar { 
+      width: 40px; 
+      height: 40px; 
+      border-radius: 50%; 
+      margin-right: 10px; 
+      object-fit: cover; 
+      background-color: #eee;
+    }
+    .content { 
+      flex: 1;
+      word-break: break-word;
+    }
+    .nickname { 
+      font-weight: bold; 
+      color: #1a73e8; 
+    }
+    .timestamp { 
+      font-size: 0.8em; 
+      color: #888; 
+      margin-left: 5px; 
+    }
+    .reply-btn { 
+      font-size: 0.8em; 
+      color: #1a73e8; 
+      cursor: pointer; 
+      margin-left: 10px; 
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .reply-btn:hover { 
+      text-decoration: underline; 
+    }
+
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    input[type="text"], 
+    input[type="file"] { 
+      flex: 1;
+      padding: 8px; 
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button { 
+      padding: 8px 16px; 
+      background-color: #1a73e8; 
+      color: white; 
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      white-space: nowrap;
+      transition: background-color 0.2s;
+    }
+    button:hover { 
+      background-color: #0c5dd6; 
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    #giphyResults { 
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    #giphyResults img { 
+      width: 100px; 
+      height: 100px;
+      object-fit: cover;
+      cursor: pointer; 
+      border: 2px solid transparent; 
+      border-radius: 4px;
+    }
+    #giphyResults img:hover { 
+      border-color: #1a73e8; 
+    }
+
+    .replying-to { 
+      font-size: 0.85em; 
+      color: #666; 
+      margin-bottom: 10px; 
+      border-left: 4px solid #1a73e8; 
+      padding-left: 10px; 
+    }
+    
+    .media-container {
+      margin-top: 5px;
+    }
+    .media-container img {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 4px;
+      border: 1px solid #eee;
+    }
+    
+    label {
+      font-weight: 500;
+      font-size: 0.9em;
+      color: #555;
+    }
+    
+    .login-form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    
+    #photoPreview {
+      display: none;
+      margin-top: 10px;
+    }
+    
+    #photoPreview img {
+      max-width: 200px;
+      max-height: 200px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+<div id="container">
+  <h2>Threaded GIF Chat with Photos</h2>
+
+  <div id="login">
+    <div class="login-form-group">
+      <label for="nickname">Nickname:</label>
+      <input type="text" id="nickname" placeholder="Enter your nickname" />
+    </div>
+    
+    <div class="login-form-group">
+      <label for="profilePicInput">Profile Picture (optional):</label>
+      <input type="file" id="profilePicInput" accept="image/*" />
+    </div>
+    
+    <button id="joinButton" onclick="signIn()">Join Chat</button>
+  </div>
+
+  <div id="chat">
+    <div id="messages"></div>
+
+    <div id="replyingTo" class="replying-to" style="display:none;">
+      <div id="replyPreviewContent"></div>
+      <button onclick="clearReplyContext()" style="margin-top:5px; font-size:0.8em; padding: 4px 8px;">Cancel Reply</button>
+    </div>
+    
+    <div class="input-group">
+      <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKey(event)" />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <hr>
+    
+    <div class="input-group">
+      <input type="text" id="gifSearch" placeholder="Search for GIFs..." />
+      <button onclick="searchGiphy()">Find GIF</button>
+    </div>
+    <div id="giphyResults"></div>
+
+    <hr>
+    
+    <div class="input-group">
+      <input type="file" id="photoInput" accept="image/*" />
+      <button onclick="uploadPhoto()">Upload Photo</button>
+    </div>
+    <div id="photoPreview"></div>
+  </div>
+</div>
+
+<script>
+  // Firebase configuration - replace with your actual values
+const firebaseConfig = {
+
+  apiKey: "AIzaSyCy9xu5ku-2iFHc5u5Lfb2OdK5t1__6lCQ",
+
+  authDomain: "diddy-chat.firebaseapp.com",
+
+  databaseURL: "https://diddy-chat-default-rtdb.europe-west1.firebasedatabase.app",
+
+  projectId: "diddy-chat",
+
+  storageBucket: "diddy-chat.firebasestorage.app",
+
+  messagingSenderId: "777033355933",
+
+  appId: "1:777033355933:web:c9c3fd51704ce53b39ba74"
+
+};
+
+
+  // Initialize Firebase
+  const app = firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  const storage = firebase.storage();
+  const storageRef = storage.ref();
+
+  let nickname = "";
+  let profileUrl = "";
+  let replyToId = null;
+  let isUploading = false;
+
+  // Show login by default
+  document.getElementById('login').style.display = 'flex';
+
+  function signIn() {
+    const nameInput = document.getElementById('nickname');
+    const fileInput = document.getElementById('profilePicInput');
+    const name = nameInput.value.trim();
+    const file = fileInput.files[0];
+    
+    if (!name) {
+      alert("Please enter a nickname.");
+      return;
+    }
+    
+    if (name.length > 20) {
+      alert("Nickname must be 20 characters or less.");
+      return;
+    }
+    
+    nickname = name;
+    
+    const joinButton = document.getElementById('joinButton');
+    joinButton.disabled = true;
+    joinButton.textContent = 'Joining...';
+    
+    if (file) {
+      if (file.size > 1 * 1024 * 1024) {
+        alert("Profile picture must be 1 MB or smaller.");
+        joinButton.disabled = false;
+        joinButton.textContent = 'Join Chat';
+        return;
+      }
+      
+      const filePath = `profiles/${Date.now()}_${file.name}`;
+      const uploadTask = storageRef.child(filePath).put(file);
+      
+      uploadTask.on('state_changed',
+        (snapshot) => {
+          // Progress handling could be added here
+        },
+        (error) => {
+          console.error("Upload failed:", error);
+          alert("Failed to upload profile picture. You can join without one.");
+          finishLogin();
+        },
+        () => {
+          uploadTask.snapshot.ref.getDownloadURL().then((url) => {
+            profileUrl = url;
+            finishLogin();
+          });
+        }
+      );
+    } else {
+      finishLogin();
+    }
+  }
+
+  function finishLogin() {
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('chat').style.display = 'block';
+    document.getElementById('messageInput').focus();
+    listenForMessages();
+  }
+
+  function sendMessage(content = null, type = "text") {
+    const input = document.getElementById('messageInput');
+    let text = content || input.value.trim();
+    
+    if (!text) return;
+    
+    // Basic sanitization for text messages
+    if (type === "text") {
+      text = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    const message = {
+      nickname,
+      text,
+      timestamp: Date.now(),
+      messageType: type,
+      parentId: replyToId || null,
+      avatar: profileUrl || null
+    };
+
+    db.ref("messages").push(message)
+      .then(() => {
+        input.value = '';
+        clearReplyContext();
+      })
+      .catch(error => {
+        console.error("Error sending message:", error);
+        alert("Failed to send message. Please try again.");
+      });
+  }
+
+  function handleKey(e) {
+    if (e.key === "Enter" && !isUploading) {
+      sendMessage();
+    }
+  }
+
+  function listenForMessages() {
+    const messagesDiv = document.getElementById('messages');
+    db.ref("messages").on("value", snapshot => {
+      messagesDiv.innerHTML = '';
+      const data = snapshot.val() || {};
+      const messages = Object.entries(data).map(([id, msg]) => ({ id, ...msg }));
+
+      // Sort messages by timestamp
+      messages.sort((a, b) => a.timestamp - b.timestamp);
+
+      const roots = messages.filter(m => !m.parentId);
+      const replies = messages.filter(m => m.parentId);
+
+      function renderMessage(msg, indent = 0) {
+        const div = document.createElement('div');
+        div.className = 'message' + (indent ? ' reply' : '');
+        
+        const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        let avatarHtml = msg.avatar 
+          ? `<img src="${msg.avatar}" class="avatar" alt="${msg.nickname}'s avatar"/>` 
+          : `<div class="avatar" title="${msg.nickname}"></div>`;
+        
+        let contentHtml = '';
+        
+        if (msg.messageType === 'gif' || msg.messageType === 'photo') {
+          contentHtml = `
+            <div class="media-container">
+              <img src="${msg.text}" alt="${msg.messageType === 'gif' ? 'GIF' : 'Photo'} from ${msg.nickname}"/>
+            </div>
+          `;
+        } else {
+          contentHtml = msg.text;
+        }
+        
+        div.innerHTML = `
+          ${avatarHtml}
+          <div class="content">
+            <div>
+              <span class="nickname">${msg.nickname}</span>
+              <span class="timestamp">${time}</span>
+              <button class="reply-btn" onclick="setReply('${msg.id}','${msg.nickname}')">Reply</button>
+            </div>
+            <div>${contentHtml}</div>
+          </div>
+        `;
+        
+        messagesDiv.appendChild(div);
+
+        // Render replies to this message
+        const childReplies = replies.filter(r => r.parentId === msg.id);
+        childReplies.forEach(reply => renderMessage(reply, indent + 1));
+      }
+
+      roots.forEach(root => renderMessage(root));
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }, error => {
+      console.error("Error listening for messages:", error);
+    });
+  }
+
+  function setReply(messageId, targetName) {
+    replyToId = messageId;
+    const preview = document.getElementById('replyPreviewContent');
+    
+    db.ref("messages/" + messageId).once("value").then(snapshot => {
+      const data = snapshot.val();
+      let html = `<strong>Replying to ${data.nickname}:</strong> `;
+      
+      if (data.messageType === 'gif' || data.messageType === 'photo') {
+        html += `<div class="media-container"><img src="${data.text}" width="150" alt="Preview"/></div>`;
+      } else {
+        const truncatedText = data.text.length > 100 
+          ? data.text.substring(0, 100) + '...' 
+          : data.text;
+        html += `"${truncatedText}"`;
+      }
+      
+      preview.innerHTML = html;
+      document.getElementById('replyingTo').style.display = 'block';
+      document.getElementById('messageInput').focus();
+    });
+  }
+
+  function clearReplyContext() {
+    replyToId = null;
+    document.getElementById('replyingTo').style.display = 'none';
+    document.getElementById('replyPreviewContent').innerHTML = '';
+  }
+
+  async function uploadPhoto() {
+    const fileInput = document.getElementById('photoInput');
+    const file = fileInput.files[0];
+    const preview = document.getElementById('photoPreview');
+    const uploadButton = document.querySelector('#chat button[onclick="uploadPhoto()"]');
+
+    if (!file) {
+        alert("Please select a photo to upload.");
+        return;
+    }
+
+    if (file.size > 1 * 1024 * 1024) {
+        alert("Photo must be 1 MB or smaller.");
+        return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        preview.innerHTML = `<img src="${e.target.result}" />`;
+        preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+
+    // Disable button during upload
+    uploadButton.disabled = true;
+    uploadButton.textContent = 'Uploading...';
+
+    try {
+        const filePath = `photos/${Date.now()}_${file.name}`;
+        const uploadTask = storageRef.child(filePath).put(file);
+
+        // Listen for upload progress (optional)
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                console.log(`Upload progress: ${progress}%`);
+                // Optional: Update UI with progress
+            },
+            (error) => {
+                console.error("Upload failed:", error);
+                alert("Failed to upload photo. Please try again.");
+                resetUploadUI();
+            },
+            async () => {
+                // Upload completed successfully
+                const url = await uploadTask.snapshot.ref.getDownloadURL();
+                await sendMessage(url, 'photo');
+                resetUploadUI();
+                fileInput.value = '';
+                preview.style.display = 'none';
+            }
+        );
+    } catch (error) {
+        console.error("Error in upload:", error);
+        alert("An error occurred. Please try again.");
+        resetUploadUI();
+    }
+
+    function resetUploadUI() {
+        uploadButton.disabled = false;
+        uploadButton.textContent = 'Upload Photo';
+    }
+}
+  // GIPHY API - replace with your actual key
+  const GIPHY_API_KEY = "YytIGjI1lavWNAcuEQEZQ0py15gb9Knn";
+
+  function searchGiphy() {
+    const query = document.getElementById('gifSearch').value.trim();
+    if (!query) return;
+    
+    const container = document.getElementById('giphyResults');
+    container.innerHTML = '<div>Searching GIFs...</div>';
+    
+    fetch(`https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(query)}&limit=6&rating=g`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.json();
+      })
+      .then(data => {
+        container.innerHTML = '';
+        
+        if (data.data.length === 0) {
+          container.innerHTML = '<div>No GIFs found. Try a different search.</div>';
+          return;
+        }
+        
+        data.data.forEach(gif => {
+          const img = document.createElement('img');
+          img.src = gif.images.fixed_height.url;
+          img.alt = gif.title || 'GIF result';
+          img.onclick = () => {
+            sendMessage(gif.images.fixed_height.url, 'gif');
+            container.innerHTML = '';
+            document.getElementById('gifSearch').value = '';
+          };
+          container.appendChild(img);
+        });
+      })
+      .catch(error => {
+        console.error("Error fetching GIFs:", error);
+        container.innerHTML = '<div>Failed to load GIFs. Please try again.</div>';
+      });
+  }
+  
+  // Add event listeners for Enter key
+  document.getElementById('nickname').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      signIn();
+    }
+  });
+  
+  document.getElementById('gifSearch').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      searchGiphy();
+    }
+  });
+</script>
+</body>
+</html>
