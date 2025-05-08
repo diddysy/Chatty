@@ -4,10 +4,7 @@
   <meta charset="UTF-8">
   <title>Threaded GIF Chat with Photos & Profile Pics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+ <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.5/dist/umd/supabase.min.js"></script>
   <style>
     body { 
       font-family: 'Segoe UI', sans-serif; 
@@ -239,37 +236,19 @@
   </div>
 </div>
 
-<script>
-  // Firebase configuration - replace with your actual values
-const firebaseConfig = {
+ <script>
+    const supabaseUrl = 'https://iqlqslhgssihzmiskbin.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlxbHFzbGhnc3NpaHptaXNrYmluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NTg3MjcsImV4cCI6MjA2MjIzNDcyN30.mWGH666k1gfaI06VFSGkq8hmLFKWf1UK7t64FwraeiI';
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-  apiKey: "AIzaSyCy9xu5ku-2iFHc5u5Lfb2OdK5t1__6lCQ",
+    let session = null;
+    let user = null;
+    let nickname = '';
+    let profileUrl = '';
 
-  authDomain: "diddy-chat.firebaseapp.com",
-
-  databaseURL: "https://diddy-chat-default-rtdb.europe-west1.firebasedatabase.app",
-
-  projectId: "diddy-chat",
-
-  storageBucket: "diddy-chat.firebasestorage.app",
-
-  messagingSenderId: "777033355933",
-
-  appId: "1:777033355933:web:c9c3fd51704ce53b39ba74"
 
 };
 
-
-  // Initialize Firebase
-  const app = firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-  const storage = firebase.storage();
-  const storageRef = storage.ref();
-
-  let nickname = "";
-  let profileUrl = "";
-  let replyToId = null;
-  let isUploading = false;
 
   // Show login by default
   document.getElementById('login').style.display = 'flex';
